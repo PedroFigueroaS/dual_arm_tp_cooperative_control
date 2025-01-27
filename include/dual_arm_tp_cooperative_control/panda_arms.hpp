@@ -6,10 +6,11 @@
 #include <controller_interface/controller_interface.hpp>
 #include "franka_semantic_components/franka_robot_model.hpp"
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp/logger.hpp>
 #include <Eigen/Dense>
 #define VERSOR_LEMMA_TH 0.000001
 
-
+namespace dual_arm_tp{
 class panda_arm
       {
     public:
@@ -18,8 +19,10 @@ class panda_arm
       Eigen::Matrix<double,6,7>bJe,bJt,wJt,wJe;
       Eigen::Matrix<double,7,1>jlmin,jlmax;
       Eigen::Matrix<double,6,1>xdot_tool;
+      Eigen::Matrix<double,7,1>xdot_jl;
       Eigen::Matrix<double,6,6>Ste,wWb;
       Eigen::Matrix<double,3,1>pos_error,rot_error;
+      panda_arm()=default;
       panda_arm(Eigen::Matrix4d init_pos,Eigen::Matrix4d offset)
       {
         bTe=init_pos;
@@ -42,6 +45,9 @@ Eigen::Vector3d VersorLemma(Eigen::Matrix3d R1, Eigen::Matrix3d R2);
 Eigen::Matrix3d rotation(double thx,double thy,double thz);
 Eigen::Matrix3d skew(Eigen::Matrix<double,3,1> v);
 std::tuple<Eigen::Matrix<double,3,1>,Eigen::Matrix<double,3,1>> cart_error(Eigen::MatrixXd wTgoal,Eigen::MatrixXd wTcp);
-std::tuple<panda_arm,panda_arm> Update_transform(panda_arm left_arm,panda_arm right_arm,std::unique_ptr<franka_semantic_components::FrankaRobotModel> &left_sensor,std::unique_ptr<franka_semantic_components::FrankaRobotModel> &right_sensor);
-std::tuple<panda_arm,panda_arm> Compute_Jacobian(panda_arm left_arm,panda_arm right_arm,std::unique_ptr<franka_semantic_components::FrankaRobotModel> &left_sensor,std::unique_ptr<franka_semantic_components::FrankaRobotModel> &right_sensor);
+std::tuple<panda_arm,panda_arm> Update_transform(panda_arm left_arm,panda_arm right_arm,Eigen::MatrixXd left_bTec, Eigen::MatrixXd right_bTec);
+
+std::tuple<panda_arm,panda_arm> Compute_Jacobian(panda_arm left_arm,panda_arm right_arm,Eigen::MatrixXd left_bJec,Eigen::MatrixXd right_bJec);
 std::tuple<panda_arm,panda_arm> ComputeTaskReferences(panda_arm left_arm,panda_arm right_arm);
+
+}

@@ -2,6 +2,11 @@
 #include <cstring>
 #include <iostream>
 
+
+
+
+namespace dual_arm_tp{
+
 Eigen::MatrixXd panda_arm::init_Jacobian()
 {
     Eigen::Matrix<double,6,7>Jac0=Eigen::MatrixXd::Zero(6,7);
@@ -207,26 +212,31 @@ std::tuple<Eigen::Matrix<double,3,1>,Eigen::Matrix<double,3,1>> cart_error(Eigen
     return std::make_tuple(error_lin,error_ang);
 }
 
-std::tuple<panda_arm,panda_arm> Update_transform(panda_arm left_arm,panda_arm right_arm,std::unique_ptr<franka_semantic_components::FrankaRobotModel> &left_sensor,std::unique_ptr<franka_semantic_components::FrankaRobotModel> &right_sensor)
+std::tuple<panda_arm,panda_arm> Update_transform(panda_arm left_arm,panda_arm right_arm,Eigen::MatrixXd left_bTec, Eigen::MatrixXd right_bTec)
 {
-    //UPDATE LEFT EE WRT B FRAME
-    Eigen::Map<const Eigen::Matrix<double, 4, 4>> left_current_tf(left_sensor->getPoseMatrix(franka::Frame::kEndEffector).data());
-    Eigen::Map<const Eigen::Matrix<double, 4, 4>> right_current_tf(right_sensor->getPoseMatrix(franka::Frame::kEndEffector).data());
-    left_arm.bTe<<left_current_tf;
-    right_arm.bTe<<right_current_tf;
+    
+    left_arm.bTe<<Eigen::MatrixXd::Identity(4,4);
+    left_arm.bTe.block(0,0,3,3)<<left_bTec.block(0,0,3,3);
+    left_arm.bTe.block(0,3,3,1)<<left_bTec.block(0,3,3,1);
+    right_arm.bTe<<Eigen::MatrixXd::Identity(4,4);
+    right_arm.bTe.block(0,0,3,3)<<right_bTec.block(0,0,3,3);
+    right_arm.bTe.block(0,3,3,1)<<right_bTec.block(0,3,3,1);
+    //right_arm.bTe=right_current_tf;
     //CONVERT FROM B FRAME TO W FRAME
     left_arm.wTe<<left_arm.wTb*left_arm.bTe;
     right_arm.wTe<<right_arm.wTb*right_arm.bTe;
     //CONVERT EE FRAME TO TOOL FRAME
     left_arm.wTt<<left_arm.wTe*left_arm.eTt;
     right_arm.wTt<<right_arm.wTe*right_arm.eTt;
+    
+    //left_arm.bTe<<Eigen::MatrixXd::Identity(4,4);
     return std::make_tuple(left_arm,right_arm);
 }
-std::tuple<panda_arm,panda_arm> Compute_Jacobian(panda_arm left_arm,panda_arm right_arm,std::unique_ptr<franka_semantic_components::FrankaRobotModel> &left_sensor,std::unique_ptr<franka_semantic_components::FrankaRobotModel> &right_sensor)
+std::tuple<panda_arm,panda_arm> Compute_Jacobian(panda_arm left_arm,panda_arm right_arm,Eigen::MatrixXd left_bJec,Eigen::MatrixXd right_bJec)
 {
   //COMPUTE LEFT TOOL JACOBIAN MATRIX
-    Eigen::Matrix<double, 6, 7> left_jacobian(left_sensor->getZeroJacobian(franka::Frame::kEndEffector).data());
-    left_arm.bJe<<left_jacobian;
+    //Eigen::Matrix<double, 6, 7> left_jacobian(left_sensor->getZeroJacobian(franka::Frame::kEndEffector).data());
+    left_arm.bJe<<left_bJec;
     left_arm.Ste=Eigen::MatrixXd::Zero(6,6);
     left_arm.Ste.block(0,0,3,3)<<Eigen::MatrixXd::Identity(3,3);
     left_arm.Ste.block(0,3,3,3)<<-skew(left_arm.wTe.block(0,0,3,3)*left_arm.eTt.block(0,3,3,1));
@@ -234,8 +244,8 @@ std::tuple<panda_arm,panda_arm> Compute_Jacobian(panda_arm left_arm,panda_arm ri
     //std::cout <<wWbl<< std::endl;
     left_arm.wJt<<left_arm.Ste*left_arm.wWb*left_arm.bJe;
     //COMPUTE RIGHT TOOL JACOBIAN MATRIX
-    Eigen::Matrix<double, 6, 7> right_jacobian(right_sensor->getZeroJacobian(franka::Frame::kEndEffector).data());
-    right_arm.bJe<<right_jacobian;
+    //Eigen::Matrix<double, 6, 7> right_jacobian(right_sensor->getZeroJacobian(franka::Frame::kEndEffector).data());
+    right_arm.bJe<<right_bJec;
     right_arm.Ste=Eigen::MatrixXd::Zero(6,6);
     right_arm.Ste.block(0,0,3,3)<<Eigen::MatrixXd::Identity(3,3);
     right_arm.Ste.block(0,3,3,3)<<-skew(right_arm.wTe.block(0,0,3,3)*right_arm.eTt.block(0,3,3,1));
@@ -245,23 +255,21 @@ std::tuple<panda_arm,panda_arm> Compute_Jacobian(panda_arm left_arm,panda_arm ri
     right_arm.wJt<<right_arm.Ste*right_arm.wWb*right_arm.bJe;
   return std::make_tuple(left_arm,right_arm);
 }
+
 std::tuple<panda_arm,panda_arm> ComputeTaskReferences(panda_arm left_arm,panda_arm right_arm)
 {
-  //LEFT ARM
-    Eigen::Matrix<double,3,1> lin_error_left,ang_error_left;    
+    Eigen::Matrix<double,3,1> lin_error_left,ang_error_left;
     std::tie(lin_error_left,ang_error_left)=cart_error(left_arm.wTg,left_arm.wTt);
-    left_arm.pos_error<<lin_error_left;
-    left_arm.rot_error<<ang_error_left;
+    //lin_error_left=left_arm.wTg.block(0,3,3,1)-left_arm.wTt.block(0,3,3,1);
+    //ang_error_left=rot_err(left_arm.wTg.block(0,0,3,3),left_arm.wTt.block(0,0,3,3));
     left_arm.xdot_tool<<1.0*lin_error_left,1.0*ang_error_left;
-    left_arm.xdot_tool.block(0,0,3,1)<<Saturate(left_arm.xdot_tool.block(0,0,3,1),0.1);
-    //left_arm.xdot_tool.block(3,0,3,1)<<Saturate(left_arm.xdot_tool.block(3,0,3,1),0.1);
-    //RIGHT ARM
-    Eigen::Matrix<double,3,1> lin_error_right,ang_error_right;    
+    Eigen::Matrix<double,3,1> lin_error_right,ang_error_right; 
     std::tie(lin_error_right,ang_error_right)=cart_error(right_arm.wTg,right_arm.wTt);
-    right_arm.pos_error<<lin_error_right;
-    right_arm.rot_error<<ang_error_right;
+    //lin_error_left=left_arm.wTg.block(0,3,3,1)-left_arm.wTt.block(0,3,3,1);   
+    //left_arm.rot_error<<ang_error_left;
+    //left_arm.bTe<<Eigen::MatrixXd::Identity(4,4);
     right_arm.xdot_tool<<1.0*lin_error_right,1.0*ang_error_right;
-    right_arm.xdot_tool.block(0,0,3,1)<<Saturate(right_arm.xdot_tool.block(0,0,3,1),0.1);
-    //right_arm.xdot_tool.block(3,0,3,1)<<Saturate(right_arm.xdot_tool.block(3,0,3,1),0.1);
     return std::make_tuple(left_arm,right_arm);
+
+}
 }
