@@ -269,7 +269,7 @@ std::tuple<panda_arm,panda_arm> Compute_Jacobian(panda_arm left_arm,panda_arm ri
     left_arm.bJe<<left_bJec;
     left_arm.Ste=Eigen::MatrixXd::Zero(6,6);
     left_arm.Ste.block(0,0,3,3)<<Eigen::MatrixXd::Identity(3,3);
-    left_arm.Ste.block(0,3,3,3)<<-skew(left_arm.wTe.block(0,0,3,3)*left_arm.eTt.block(0,3,3,1));
+    left_arm.Ste.block(0,3,3,3)<<skew(left_arm.wTe.block(0,0,3,3)*left_arm.eTt.block(0,3,3,1));
     left_arm.Ste.block(3,3,3,3)<<Eigen::MatrixXd::Identity(3,3);
     //std::cout <<wWbl<< std::endl;
     left_arm.wJt<<left_arm.Ste*left_arm.wWb*left_arm.bJe;
@@ -278,7 +278,7 @@ std::tuple<panda_arm,panda_arm> Compute_Jacobian(panda_arm left_arm,panda_arm ri
     right_arm.bJe<<right_bJec;
     right_arm.Ste=Eigen::MatrixXd::Zero(6,6);
     right_arm.Ste.block(0,0,3,3)<<Eigen::MatrixXd::Identity(3,3);
-    right_arm.Ste.block(0,3,3,3)<<-skew(right_arm.wTe.block(0,0,3,3)*right_arm.eTt.block(0,3,3,1));
+    right_arm.Ste.block(0,3,3,3)<<skew(right_arm.wTe.block(0,0,3,3)*right_arm.eTt.block(0,3,3,1));
     right_arm.Ste.block(3,3,3,3)<<Eigen::MatrixXd::Identity(3,3);
     //wWbr.block(0,0,3,3)<<right_arm.wTb.block(0,0,3,3);
     //wWbr.block(3,3,3,3)<<right_arm.wTb.block(0,0,3,3);
@@ -366,15 +366,15 @@ std::tuple<panda_arm,panda_arm> ComputeTaskReferences(panda_arm left_arm,panda_a
         left_arm.pos_error_goal<<lin_error_left;
         left_arm.rot_error_goal<<ang_error_left;    
         left_arm.xdot_tool<<1.0*lin_error_left,1.0*ang_error_left;
-        // left_arm.xdot_tool.block(0,0,3,1)<<Saturate(left_arm.xdot_tool.block(0,0,3,1),0.05);
-        // left_arm.xdot_tool.block(3,0,3,1)<<Saturate(left_arm.xdot_tool.block(3,0,3,1),0.05);
+        left_arm.xdot_tool.block(0,0,3,1)<<Saturate(left_arm.xdot_tool.block(0,0,3,1),0.3);
+        left_arm.xdot_tool.block(3,0,3,1)<<Saturate(left_arm.xdot_tool.block(3,0,3,1),0.3);
         Eigen::Matrix<double,3,1> lin_error_right,ang_error_right; 
         std::tie(lin_error_right,ang_error_right)=cart_error(wTog,right_arm.wTo);
         right_arm.pos_error_goal<<lin_error_right;
         right_arm.rot_error_goal<<ang_error_right;    
         right_arm.xdot_tool<<1.0*lin_error_right,1.0*ang_error_right;
-        // right_arm.xdot_tool.block(0,0,3,1)<<Saturate(right_arm.xdot_tool.block(0,0,3,1),0.05);
-        // right_arm.xdot_tool.block(3,0,3,1)<<Saturate(right_arm.xdot_tool.block(3,0,3,1),0.05);
+        right_arm.xdot_tool.block(0,0,3,1)<<Saturate(right_arm.xdot_tool.block(0,0,3,1),0.3);
+        right_arm.xdot_tool.block(3,0,3,1)<<Saturate(right_arm.xdot_tool.block(3,0,3,1),0.3);
 
         break;
     }
@@ -422,7 +422,7 @@ std::tuple<panda_arm,panda_arm,mission> update_mission_phase(panda_arm left_arm,
             left_arm.tTo<<tRol,tPol,
               Eigen::MatrixXd::Zero(1,3),1;
             tRor=right_arm.wTt.block(0,0,3,3).transpose()*right_arm.wTo.block(0,0,3,3);
-            tPor<<-right_arm.wTt.block(0,3,3,1)+right_arm.wTo.block(0,3,3,1);
+            tPor<<right_arm.wTt.block(0,3,3,1)-right_arm.wTo.block(0,3,3,1);
             right_arm.tTo<<tRor,tPor,
               Eigen::MatrixXd::Zero(1,3),1;
 
@@ -431,7 +431,7 @@ std::tuple<panda_arm,panda_arm,mission> update_mission_phase(panda_arm left_arm,
         break;
     
     case 2:
-        if(left_arm.pos_error_goal.norm()<0.02 && right_arm.pos_error_goal.norm()<0.3 && left_arm.rot_error_goal.norm()<0.0698 && right_arm.rot_error_goal.norm()<0.0698)
+        if(left_arm.pos_error_goal.norm()<0.05 && right_arm.pos_error_goal.norm()<0.05 && left_arm.rot_error_goal.norm()<0.0698 && right_arm.rot_error_goal.norm()<0.0698)
             {
             state.phase=3;
             state.prev_action=state.current_action;
